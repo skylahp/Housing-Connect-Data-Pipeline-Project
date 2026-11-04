@@ -1,0 +1,239 @@
+//viewing the data
+select
+    * 
+from
+    housing_connect_by_lottery;
+
+select
+    *
+from
+    housing_connect_by_building;
+
+// turned joined data into a table 
+// turned join into a cte in order to update table with the pivot 
+// added pivots to cte after checking that they work with dql
+
+create or replace table all_housing_connect_data as 
+ (with housing_data as 
+     (select
+                hcb.*,
+                hcl.lottery_status_,
+                hcl.lottery_start_date_,
+                hcl.lottery_end_date,
+                hcl.lottery_mobility_percentage_,
+                hcl."Lottery_Vision/Hearing_Percentage_",
+                hcl.lottery_community_board_percentage_,
+                hcl."Lottery_Municipal_Employee/Military_Veteran_Percentage_",
+                hcl.lottery_nycha_percentage_,
+                hcl.lottery_senior_percentage
+            from
+                housing_connect_by_building as hcb 
+            inner join
+                housing_connect_by_lottery as hcl
+            on 
+                hcb.lottery_id = hcl.lottery_id)
+        select 
+            *
+        from 
+            housing_data
+        unpivot(Value for Unit_Type in 
+        ("Unit_Distribution_-_Studio", "Unit_Distribution_-_1_Bedroom", "Unit_Distribution_-_2_Bedrooms_", "Unit_Distribution_-_3_Bedrooms", "Unit_Distribution_-_4_Bedrooms+") )
+        unpivot(Value2 for AMI_category in 
+        ("Applied_Income_AMI_Category_-_Extremely_Low_Income", "Applied_Income_AMI_Category_-_Very_Low_Income", "Applied_Income_AMI_Category_-_Low_Income_", "Applied_Income_AMI_Category_-_Moderate_Income", "Applied_Income_AMI_Category_-_Middle_Income", "Applied_Income_AMI_Category_-_Above_Middle_Income")) 
+    );
+   
+select 
+    *
+from 
+    all_housing_connect_data
+order by 
+    lottery_id asc;
+        
+
+// table check 
+    select
+        *
+    from
+        all_housing_connect_data
+    order by 
+        lottery_id asc;
+
+//create id table 
+
+create table ids(
+    housing_connect_building_id int,
+    lottery_id int
+);
+
+insert into 
+    ids (housing_connect_building_id, lottery_id)
+select 
+    housing_connect_building_id, 
+    lottery_id
+from
+    all_housing_connect_data;
+
+// table check
+
+select 
+    *
+from
+    ids
+order by 
+    lottery_id asc;
+
+//create lottery information 
+create table lottery_information (
+    lottery_id int,
+    lottery_name varchar,
+    start_date date,
+    end_date date,
+    lottery_status varchar,
+    development_type varchar
+);
+
+insert into 
+    lottery_information 
+select
+    lottery_id,
+    lottery_name,
+    lottery_start_date_,
+    lottery_end_date,
+    lottery_status_,
+    development_type
+from 
+    all_housing_connect_data;
+
+// table check 
+select 
+    *
+from
+    lottery_information
+order by
+    lottery_id asc;
+
+// create unit information
+create table unit_information(
+    lottery_id int,
+    unit_type varchar);
+
+insert into 
+    unit_information
+select 
+    lottery_id,
+    unit_type
+from 
+    all_housing_connect_data;
+
+
+update unit_information
+set unit_type = case
+    when unit_type = 'Unit_Distribution_-_Studio' then 'Studio'
+    when unit_type = 'Unit_Distribution_-_1_Bedroom' then '1 Bedroom'
+    when unit_type = 'Unit_Distribution_-_2_Bedrooms_' then '2 Bedroom'
+    when unit_type = 'Unit_Distribution_-_3_Bedrooms' then '3 Bedroom'
+    when unit_type = 'Unit_Distribution_-_4_Bedrooms+'then '4+ Bedrooms'
+end;
+
+// table check
+select 
+    *
+from 
+    unit_information;
+    
+// create building information
+create table building_information(
+    housing_connect_building_id int,
+    hpd_building_id int,
+    construction_type varchar,
+    bin int,
+    bbl int
+);
+
+insert into 
+    building_information
+select
+    housing_connect_building_id,
+    hpd_building_id,
+    reporting_construction_type,
+    bin,
+    bbl
+from 
+    all_housing_connect_data;
+
+// table check
+
+select 
+    *
+from
+    building_information;
+
+// create location_information
+create or replace table location_information(
+    housing_connect_building_id int,
+    house_number varchar,
+    street_name varchar,
+    borough varchar,
+    postcode int,
+    community_board varchar,
+    census_tract int,
+    longitude decimal(9,6),
+    latitude decimal(8,6)
+);
+
+insert into 
+    location_information
+
+select 
+    housing_connect_building_id,
+    house_number,
+    street_name,
+    borough,
+    postcode,
+    community_board,
+    "Census_Tract_(2020)",
+    longitude,
+    latitude
+    
+from 
+    all_housing_connect_data;
+
+// table check 
+select
+    *
+from 
+    location_information;
+
+// create ami category table
+create table ami_category(
+    lottery_id int,
+    ami_category varchar
+);
+
+insert into 
+    ami_category
+select 
+    lottery_id,
+    ami_category
+    
+from 
+    all_housing_connect_data;
+
+update ami_category
+set ami_category = case
+    when ami_category = 'Applied_Income_AMI_Category_-_Extremely_Low_Income' then 'Extremely Low Income'
+    when ami_category = 'Applied_Income_AMI_Category_-_Low_Income_' then 'Low Income'
+    when ami_category = 'Applied_Income_AMI_Category_-_Moderate_Income_' then 'Moderate Income'
+    when ami_category = 'Applied_Income_AMI_Category_-_Middle_Income' then 'Middle Income'
+end;
+
+delete from 
+    ami_category
+where
+    ami_category is null;
+    
+//table check 
+select
+    *
+from
+    ami_category;
